@@ -1,36 +1,11 @@
-# Dependencies
 node_modules/
-.pnp
-.pnp.js
-
-# Build
 dist/
 build/
-*.tsbuildinfo
-
-# Env
 .env
 .env.local
-.env.*.local
-
-# Logs
-logs/
 *.log
-npm-debug.log*
-
-# OS
 .DS_Store
-Thumbs.db
-
-# Temp / jobs
-tmp/
-*.tmp
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Test
+backend/tmp/
+*.tsbuildinfo
+.vite/
 coverage/
