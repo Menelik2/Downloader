@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Download, Menu, X, Moon, Sun } from 'lucide-react'
+import { Link, Menu, X, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navLinks = [
