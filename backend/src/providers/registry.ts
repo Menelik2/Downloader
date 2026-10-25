@@ -1,19 +1,20 @@
 import type { Provider } from './types.js'
 import type { ProviderInfo } from '../types/index.js'
 import { directMediaProvider } from './direct-media.js'
-import { youtubeProvider } from './youtube.js'
+import { ytdlpProvider } from './ytdlp.js'
 import { genericOembedProvider } from './oembed.js'
 import { redditProvider } from './reddit.js'
 
 /**
  * Modular provider registry.
- * Add new providers here without touching the rest of the application.
+ * Order matters: first match wins.
+ * ytdlp handles major social platforms with real downloads when installed.
  */
 const providers: Provider[] = [
-  directMediaProvider,
-  youtubeProvider,
-  redditProvider,
-  genericOembedProvider, // fallback for some public oEmbed endpoints
+  directMediaProvider, // exact .mp4/.mp3 etc. URLs first
+  ytdlpProvider,       // real downloads: YouTube, TikTok, IG, X, FB, Reddit, …
+  redditProvider,      // fallback if ytdlp missing
+  genericOembedProvider,
 ]
 
 export function getAllProviders(): ProviderInfo[] {
@@ -21,7 +22,6 @@ export function getAllProviders(): ProviderInfo[] {
 }
 
 export function findProvider(hostname: string, url: string): Provider | null {
-  // Prefer more specific providers first
   for (const p of providers) {
     if (p.matches(hostname, url)) {
       return p
