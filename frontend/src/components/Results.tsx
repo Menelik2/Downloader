@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import {
   Download,
   ExternalLink,
@@ -58,13 +57,11 @@ export function Results({ data, onDownload, job, downloading, onCancel }: Result
     )
   }
 
-  const hasFormats = (data.formats?.length ?? 0) > 0
   const authorizedFormats = data.formats?.filter((f) => f.authorized) ?? []
 
   return (
     <section className="mx-auto max-w-3xl px-4 pb-12 sm:px-6" aria-live="polite">
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
-        {/* Header */}
         <div className="flex flex-col gap-4 border-b border-border bg-surface-2/50 p-5 sm:flex-row sm:items-start">
           {data.thumbnail ? (
             <img
@@ -116,7 +113,6 @@ export function Results({ data, onDownload, job, downloading, onCancel }: Result
           </div>
         </div>
 
-        {/* Formats */}
         <div className="p-5">
           {authorizedFormats.length > 0 ? (
             <ul className="space-y-3">
@@ -172,7 +168,6 @@ export function Results({ data, onDownload, job, downloading, onCancel }: Result
             </div>
           )}
 
-          {/* Job progress */}
           {job && (job.status === 'queued' || job.status === 'processing') && (
             <div className="mt-5 rounded-xl border border-border bg-surface-2 p-4">
               <div className="flex items-center justify-between text-sm">
@@ -210,7 +205,6 @@ export function Results({ data, onDownload, job, downloading, onCancel }: Result
             </div>
           )}
 
-          {/* Official link always available when present */}
           {data.officialUrl && (
             <div className="mt-5 flex justify-center">
               <a
