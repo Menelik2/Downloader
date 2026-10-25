@@ -5,7 +5,7 @@
 
 import { randomBytes } from 'node:crypto'
 import { unlink } from 'node:fs/promises'
-import type { Job, JobStatus } from '../types/index.js'
+import type { Job } from '../types/index.js'
 
 const jobs = new Map<string, Job>()
 
