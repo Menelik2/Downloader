@@ -12,8 +12,6 @@ import type { AnalyzeResult, MediaFormat } from '../types/index.js'
 import { safeFetch } from '../utils/safe-fetch.js'
 import path from 'node:path'
 import { createWriteStream } from 'node:fs'
-import { pipeline } from 'node:stream/promises'
-import { Readable } from 'node:stream'
 import { mkdir } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 
@@ -67,7 +65,6 @@ export const directMediaProvider: Provider = {
   async analyze(ctx): Promise<AnalyzeResult> {
     const head = await safeFetch(ctx.url, { method: 'HEAD', timeoutMs: 10_000 })
     if (!head.ok) {
-      // Fall back to a small GET if HEAD is blocked
       const get = await safeFetch(ctx.url, {
         method: 'GET',
         maxBytes: 64 * 1024,
@@ -98,37 +95,110 @@ export const directMediaProvider: Provider = {
     const ext = getExtension(ctx.url) || 'bin'
     const filename = `media-${id}.${ext}`
     const filePath = path.join(tmpRoot, filename)
-
-    // Stream the file with size limit
     const maxBytes = (Number(process.env.MAX_FILE_SIZE_MB) || 500) * 1024 * 1024
 
-    const result = await safeFetch(ctx.url, {
-      method: 'GET',
-      maxBytes, // this will still load into memory in current safeFetch – for production improve with streaming
-      timeoutMs: 120_000,
-    })
-
-    if (!result.ok || !result.body) {
-      return {
-        ok: false,
-        error: result.ok ? 'Empty body' : result.error,
-        code: result.ok ? 'EMPTY_BODY' : result.code,
-      }
+    const { validateAndNormalizeUrl } = await import('../utils/url-validator.js')
+    const validated = await validateAndNormalizeUrl(ctx.url)
+    if (!validated.ok) {
+      return { ok: false, error: validated.error, code: validated.code }
     }
 
-    // Write to disk
-    const nodeStream = Readable.from(Buffer.from(result.body))
-    await pipeline(nodeStream, createWriteStream(filePath))
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 120_000)
 
-    const contentType =
-      result.response.headers.get('content-type') ||
-      (ext === 'mp3' || ext === 'm4a' ? 'audio/mpeg' : 'video/mp4')
+      const res = await fetch(validated.url.href, {
+        method: 'GET',
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: {
+          'User-Agent':
+            'LinkFetch/1.0 (+https://github.com/Menelik2/Downloader; media-analyzer)',
+        },
+      })
+      clearTimeout(timer)
 
-    return {
-      ok: true,
-      filePath,
-      contentType,
-      filename: `download.${ext}`,
+      if (res.status >= 300 && res.status < 400) {
+        return {
+          ok: false,
+          error: 'Redirect not followed for security reasons. Use the final media URL directly.',
+          code: 'REDIRECT_BLOCKED',
+        }
+      }
+
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: `Remote server returned ${res.status}`,
+          code: 'REMOTE_HTTP_ERROR',
+        }
+      }
+
+      const contentLength = res.headers.get('content-length')
+      if (contentLength && parseInt(contentLength, 10) > maxBytes) {
+        return {
+          ok: false,
+          error: 'File exceeds maximum allowed size',
+          code: 'FILE_TOO_LARGE',
+        }
+      }
+
+      if (!res.body) {
+        return { ok: false, error: 'Empty body', code: 'EMPTY_BODY' }
+      }
+
+      const reader = res.body.getReader()
+      const fileStream = createWriteStream(filePath)
+      let written = 0
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          written += value.byteLength
+          if (written > maxBytes) {
+            reader.cancel()
+            fileStream.destroy()
+            throw new Error('FILE_TOO_LARGE')
+          }
+          if (!fileStream.write(Buffer.from(value))) {
+            await new Promise<void>((resolve) => fileStream.once('drain', resolve))
+          }
+        }
+        await new Promise<void>((resolve, reject) => {
+          fileStream.end(() => resolve())
+          fileStream.on('error', reject)
+        })
+      } catch (e) {
+        fileStream.destroy()
+        throw e
+      }
+
+      const contentType =
+        res.headers.get('content-type') ||
+        (ext === 'mp3' || ext === 'm4a' ? 'audio/mpeg' : 'video/mp4')
+
+      return {
+        ok: true,
+        filePath,
+        contentType,
+        filename: `download.${ext}`,
+      }
+    } catch (err) {
+      try {
+        const { unlink } = await import('node:fs/promises')
+        await unlink(filePath)
+      } catch {
+        /* ignore */
+      }
+      const message = err instanceof Error ? err.message : 'Download failed'
+      if (message === 'FILE_TOO_LARGE' || message.includes('FILE_TOO_LARGE')) {
+        return { ok: false, error: 'File exceeds maximum allowed size', code: 'FILE_TOO_LARGE' }
+      }
+      if (err instanceof Error && err.name === 'AbortError') {
+        return { ok: false, error: 'Download timed out', code: 'TIMEOUT' }
+      }
+      return { ok: false, error: message, code: 'DOWNLOAD_FAILED' }
     }
   },
 }
