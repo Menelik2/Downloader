@@ -18,9 +18,7 @@ export interface MediaFormat {
   filesize?: number
   hasVideo: boolean
   hasAudio: boolean
-  /** Only true when the download is authorized for this service */
   authorized: boolean
-  /** Direct URL only when the platform serves a public, non-protected media file */
   url?: string
 }
 
@@ -54,7 +52,6 @@ export interface Job {
   error?: string
   createdAt: string
   updatedAt: string
-  /** Internal only – never sent to client */
   filePath?: string
   expiresAt: number
   providerId?: string
@@ -69,6 +66,7 @@ export interface HealthResponse {
   dependencies: {
     tmpDir: boolean
     ffmpeg: boolean
+    ytdlp?: boolean
   }
   limits: {
     maxConcurrentJobs: number
