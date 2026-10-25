@@ -25,15 +25,13 @@ const VERSION = '1.0.0'
 
 const app = express()
 
-// Security headers
 app.use(
   helmet({
-    contentSecurityPolicy: false, // frontend handles its own CSP
+    contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 )
 
-// CORS
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map((s) => s.trim())
@@ -45,7 +43,7 @@ app.use(
       if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
         cb(null, true)
       } else {
-        cb(new Error('Not allowed by CORS'))
+        cb(null, false)
       }
     },
     credentials: false,
@@ -54,7 +52,6 @@ app.use(
 
 app.use(express.json({ limit: '16kb' }))
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: Number(process.env.RATE_LIMIT_MAX) || 60,
@@ -64,10 +61,7 @@ const limiter = rateLimit({
 })
 app.use('/api/', limiter)
 
-// ---------- Routes ----------
-
 app.get('/api/health', async (_req, res) => {
-  const tmpDir = process.env.TMP_DIR || './tmp'
   const ffmpegAvailable = existsSync(process.env.FFMPEG_PATH || '/usr/bin/ffmpeg')
 
   const body: HealthResponse = {
@@ -75,7 +69,7 @@ app.get('/api/health', async (_req, res) => {
     version: VERSION,
     timestamp: new Date().toISOString(),
     dependencies: {
-      tmpDir: true, // will be created on demand
+      tmpDir: true,
       ffmpeg: ffmpegAvailable,
     },
     limits: {
@@ -202,7 +196,6 @@ app.post('/api/download', async (req, res) => {
     originalUrl: validated.url.href,
   })
 
-  // Process asynchronously
   setImmediate(async () => {
     updateJob(job.id, { status: 'processing', progress: 10, message: 'Starting download…' })
     try {
@@ -243,7 +236,8 @@ app.post('/api/download', async (req, res) => {
 })
 
 app.get('/api/jobs/:id', (req, res) => {
-  const job = getJob(req.params.id)
+  const jobId = String(req.params.id || '')
+  const job = getJob(jobId)
   if (!job) {
     return res.status(404).json({
       error: 'Job not found or expired',
@@ -262,7 +256,8 @@ app.get('/api/download/:id', async (req, res) => {
     })
   }
 
-  const job = getJobByToken(req.params.id, token)
+  const jobId = String(req.params.id || '')
+  const job = getJobByToken(jobId, token)
   if (!job) {
     return res.status(404).json({
       error: 'Job not found, expired, or token mismatch',
@@ -298,7 +293,7 @@ app.get('/api/download/:id', async (req, res) => {
 })
 
 app.delete('/api/jobs/:id', (req, res) => {
-  const ok = cancelJob(req.params.id)
+  const ok = cancelJob(String(req.params.id || ''))
   if (!ok) {
     return res.status(404).json({
       error: 'Job not found or already finished',
@@ -308,12 +303,10 @@ app.delete('/api/jobs/:id', (req, res) => {
   return res.json({ success: true, message: 'Job cancelled' })
 })
 
-// 404 for unknown API routes
-app.use('/api/*', (_req, res) => {
+app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found', errorCode: 'NOT_FOUND' })
 })
 
-// Global error handler – never leak stack traces
 app.use(
   (
     err: Error,
