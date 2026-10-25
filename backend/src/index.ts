@@ -19,6 +19,7 @@ import {
   cleanupAllJobs,
 } from './services/job-service.js'
 import type { HealthResponse } from './types/index.js'
+import { checkYtDlpAvailable } from './providers/ytdlp.js'
 
 const PORT = Number(process.env.PORT) || 3001
 const VERSION = '1.0.0'
@@ -63,14 +64,16 @@ app.use('/api/', limiter)
 
 app.get('/api/health', async (_req, res) => {
   const ffmpegAvailable = existsSync(process.env.FFMPEG_PATH || '/usr/bin/ffmpeg')
+  const ytdlpOk = await checkYtDlpAvailable()
 
   const body: HealthResponse = {
-    status: 'ok',
+    status: ytdlpOk ? 'ok' : 'degraded',
     version: VERSION,
     timestamp: new Date().toISOString(),
     dependencies: {
       tmpDir: true,
       ffmpeg: ffmpegAvailable,
+      ytdlp: ytdlpOk,
     },
     limits: {
       maxConcurrentJobs: Number(process.env.MAX_CONCURRENT_JOBS) || 5,
