@@ -50,8 +50,9 @@ export default function App() {
     try {
       const data = await analyzeUrl(url)
       setResult(data)
-      if (!data.success && data.error) {
-        setError(data.message || data.error)
+      // Only surface a top-level error when there is no structured result to show
+      if (!data.success && !data.provider) {
+        setError(data.message || data.error || 'Unable to analyze this link')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
